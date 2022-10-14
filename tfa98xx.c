@@ -57,12 +57,10 @@ struct tfa98xx *g_tfa98xx[4] = {0};
 
 /* Supported rates and data formats */
 #define TFA98XX_RATES SNDRV_PCM_RATE_8000_48000
-//#if OP_FEATURE_MM_24BIT == 1
+
 #define TFA98XX_FORMATS	(SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S24_LE | \
                          SNDRV_PCM_FMTBIT_S32_LE | SNDRV_PCM_FMTBIT_S24_3LE)
-//#else
-//#define TFA98XX_FORMATS	(SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S24_LE | SNDRV_PCM_FMTBIT_S32_LE)
-//#endif
+
 
 #define TF98XX_MAX_DSP_START_TRY_COUNT	10
 #define TFADSP_FLAG_CALIBRATE_DONE 1
@@ -124,9 +122,7 @@ static enum Tfa98xx_Error tfa9874_calibrate(struct tfa98xx *tfa98xx, int *speake
 extern int send_tfa_cal_apr(void *buf, int cmd_size, bool bRead);
 extern int send_tfa_cal_in_band(void *buf, int cmd_size);
 
-#ifdef OPLUS_FEATURE_TFA98XX_VI_FEEDBACK
-extern void set_smartpa_id(int id);
-#endif
+
 struct tfa98xx_rate {
 	unsigned int rate;
 	unsigned int fssel;
@@ -1321,7 +1317,7 @@ static int tfa98xx_set_profile(struct snd_kcontrol *kcontrol,
 		/* Don't call tfa_dev_start() if there is no clock. */
 		mutex_lock(&tfa98xx->dsp_lock);
 		tfa98xx_dsp_system_stable(tfa98xx->tfa, &ready);
-		//liuhaituo add
+
 		pr_info("ready = %d\n", ready);
 		if (ready) {
 			/* Also re-enables the interrupts */
@@ -1336,10 +1332,7 @@ static int tfa98xx_set_profile(struct snd_kcontrol *kcontrol,
 		}
 		mutex_unlock(&tfa98xx->dsp_lock);
 
-		/* Flag DSP as invalidated as the profile change may invalidate the
-		 * current DSP configuration. That way, further stream start can
-		 * trigger a tfa_dev_start.
-		 */
+
 		tfa98xx->dsp_init = TFA98XX_DSP_INIT_INVALIDATED;
 	}
 
@@ -1494,7 +1487,6 @@ static int tfa98xx_get_cal_ctl(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
-//liuhaituo add begain
 #ifdef TFA9894_NONDSP_STEREO
 #define CHIP_SELECTOR_STEREO	(0)
 #define CHIP_SELECTOR_LEFT		(1)
@@ -1579,7 +1571,6 @@ static int tfa98xx_get_stereo_ctl(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
-//#ifdef VENDOR_EDIT
 static int tfa98xx_info_enable_ctl(struct snd_kcontrol *kcontrol,
 		struct snd_ctl_elem_info *uinfo)
 {
@@ -1645,8 +1636,8 @@ static int tfa98xx_get_mute_ctl(struct snd_kcontrol *kcontrol,
 	ucontrol->value.integer.value[0] = 0;
 	return 0;
 }
-//#endif
-#endif /* TFA9894_NONDSP_STEREO */
+
+#endif
 
 static int tfa98xx_create_controls(struct tfa98xx *tfa98xx)
 {
@@ -1655,25 +1646,16 @@ static int tfa98xx_create_controls(struct tfa98xx *tfa98xx)
 	char *name;
 	struct tfa98xx_baseprofile *bprofile;
 
-	/* Create the following controls:
-	 *  - enum control to select the active profile
-	 *  - one volume control for each profile hosting a vstep
-	 *  - Stop control on TFA1 devices
-	 */
 	pr_err("%s: enter!\n", __func__);
 
 	nr_controls = 2; /* Profile and stop control */
 
 #ifdef TFA9894_NONDSP_STEREO
-//#ifdef VENDOR_EDIT
 	nr_controls += 3;
-//#else
-	//nr_controls += 1;
-//#endif
 #endif
 
 	if (tfa98xx->flags & TFA98XX_FLAG_CALIBRATION_CTL)
-		nr_controls += 1; /* calibration */
+		nr_controls += 1;
 
 	/* allocate the tfa98xx_controls base on the nr of profiles */
 	nprof = tfa_cnt_get_dev_nprof(tfa98xx->tfa);
@@ -1783,7 +1765,6 @@ static int tfa98xx_create_controls(struct tfa98xx *tfa98xx)
 	}
 
 #ifdef TFA9894_NONDSP_STEREO
-/*liuhaituo add */
 	tfa98xx_controls[mix_index].name = "TFA_CHIP_SELECTOR";
 	tfa98xx_controls[mix_index].iface = SNDRV_CTL_ELEM_IFACE_MIXER;
 	tfa98xx_controls[mix_index].info = tfa98xx_info_stereo_ctl;
@@ -1798,14 +1779,12 @@ static int tfa98xx_create_controls(struct tfa98xx *tfa98xx)
 	tfa98xx_controls[mix_index].put = tfa98xx_set_enable_ctl;
 	mix_index++;
 
-//#ifdef VENDOR_EDIT
 	tfa98xx_controls[mix_index].name = "Tfa Mute";
 	tfa98xx_controls[mix_index].iface = SNDRV_CTL_ELEM_IFACE_MIXER;
 	tfa98xx_controls[mix_index].info = tfa98xx_info_mute_ctl;
 	tfa98xx_controls[mix_index].get = tfa98xx_get_mute_ctl;
 	tfa98xx_controls[mix_index].put = tfa98xx_set_mute_ctl;
 	mix_index++;
-//#endif
 #endif
 
 	return snd_soc_add_codec_controls(tfa98xx->codec,
@@ -1849,11 +1828,6 @@ static int tfa98xx_append_i2c_address(struct device *dev,
 			dai_drv[i].capture.stream_name = tfa98xx_devm_kstrdup(dev, buf);
 		}
 
-	/* the idea behind this is convert:
-	 * SND_SOC_DAPM_AIF_IN("AIF IN", "AIF Playback", 0, SND_SOC_NOPM, 0, 0),
-	 * into:
-	 * SND_SOC_DAPM_AIF_IN("AIF IN", "AIF Playback-2-36", 0, SND_SOC_NOPM, 0, 0),
-	 */
 	if (widgets && num_widgets > 0)
 		for(i = 0; i < num_widgets; i++) {
 			if(!widgets[i].sname)
@@ -1870,7 +1844,7 @@ static int tfa98xx_append_i2c_address(struct device *dev,
 }
 
 static struct snd_soc_dapm_widget tfa98xx_dapm_widgets_common[] = {
-	/* Stream widgets */
+
 	SND_SOC_DAPM_AIF_IN("AIF IN", "AIF Playback", 0, SND_SOC_NOPM, 0, 0),
 	SND_SOC_DAPM_AIF_OUT("AIF OUT", "AIF Capture", 0, SND_SOC_NOPM, 0, 0),
 
@@ -1926,7 +1900,6 @@ static void tfa98xx_add_widgets(struct tfa98xx *tfa98xx)
 	struct snd_soc_dapm_widget *widgets;
 	unsigned int num_dapm_widgets = ARRAY_SIZE(tfa98xx_dapm_widgets_common);
 
-//add by Multimedia,do not add the following non-used widgets to hold mic.
     if(1)
         return;
 
@@ -2063,9 +2036,6 @@ retry:
 }
 
 
-/*
- * init external dsp
- */
 enum Tfa98xx_Error
 tfa98xx_init_dsp(struct tfa_device *tfa)
 {
@@ -2244,7 +2214,6 @@ retry:
 
 static void tfa98xx_interrupt_enable_tfa2(struct tfa98xx *tfa98xx, bool enable)
 {
-	/* Only for 0x72 we need to enable NOCLK interrupts */
 	if (tfa98xx->flags & TFA98XX_FLAG_REMOVE_PLOP_NOISE)
 		tfa_irq_ena(tfa98xx->tfa, tfa9912_irq_stnoclk, enable);
 
@@ -2393,7 +2362,7 @@ static void tfa98xx_container_loaded(const struct firmware *cont, void *context)
 	}
 
 	tfa98xx->tfa->dev_idx = tfa_cont_get_idx(tfa98xx->tfa);
-	/* liuhaituo add */
+
 	pr_info("%s: tfa98xx->tfa->dev_idx = %d\n", __func__, tfa98xx->tfa->dev_idx);
 	if (tfa98xx->tfa->dev_idx < 0) {
 		dev_err(tfa98xx->dev, "Failed to find TFA98xx @ 0x%.2x in container file\n", tfa98xx->i2c->addr);
@@ -2436,7 +2405,6 @@ static void tfa98xx_container_loaded(const struct firmware *cont, void *context)
 	if (no_start != 0)
 		return;
 
-	/* Only controls for master device */
 	if ((tfa98xx->tfa->dev_idx==0) || ((tfa98xx->tfa->dev_idx==1) && codec_is_dummy)) {
 		codec_is_dummy = 0;
 		tfa98xx_create_controls(tfa98xx);
@@ -2449,8 +2417,7 @@ static void tfa98xx_container_loaded(const struct firmware *cont, void *context)
 		tfa_reset(tfa98xx->tfa);
 	}
 
-#if 0 /* tfa9874 don't need this */
-	/* Preload settings using internal clock on TFA2 */
+#if 0
 	if (tfa98xx->tfa->tfa_family == 2) {
 		mutex_lock(&tfa98xx->dsp_lock);
 		ret = tfa98xx_tfa_start(tfa98xx, tfa98xx->profile, tfa98xx->vstep);
@@ -2704,22 +2671,12 @@ static int tfa98xx_startup(struct snd_pcm_substream *substream,
 	int len, prof, nprof, idx = 0;
 	char *basename;
 
-//#if OP_FEATURE_MM_24BIT == 1
-//	u64 formats;
-//	int err;
-//#endif
-
-	/*
-	 * Support CODEC to CODEC links,
-	 * these are called with a NULL runtime pointer.
-	 */
 	if (!substream->runtime)
 		return 0;
 
 	if (pcm_no_constraint != 0)
 		return 0;
 
-//#if OP_FEATURE_MM_24BIT == 1
 #if 0
 	switch (pcm_sample_format) {
 	case 1:
@@ -2738,7 +2695,7 @@ static int tfa98xx_startup(struct snd_pcm_substream *substream,
 	if (err < 0)
 		return err;
 #endif
-//#endif
+
 
 	if (no_start != 0)
 		return 0;
@@ -2784,9 +2741,6 @@ static int tfa98xx_startup(struct snd_pcm_substream *substream,
 
 return 0;
 
-//	return snd_pcm_hw_constraint_list(substream->runtime, 0,
-//				   SNDRV_PCM_HW_PARAM_RATE,
-//				   &tfa98xx->rate_constraint);
 }
 
 static int tfa98xx_set_dai_sysclk(struct snd_soc_dai *codec_dai,
@@ -2812,7 +2766,6 @@ static int tfa98xx_set_fmt(struct snd_soc_dai *dai, unsigned int fmt)
 
 	pr_info("fmt=0x%x\n", fmt);
 
-	/* Supported mode: regular I2S, slave, or PDM */
 	switch (fmt & SND_SOC_DAIFMT_FORMAT_MASK) {
 	case SND_SOC_DAIFMT_I2S:
 		if ((fmt & SND_SOC_DAIFMT_MASTER_MASK) != SND_SOC_DAIFMT_CBS_CFS) {
@@ -3016,6 +2969,7 @@ static int tfa98xx_mute(struct snd_soc_dai *dai, int mute, int stream)
 		else
 			tfa98xx->cstream = 0;
 
+		/* liuhaituo@MM.Audio 2018/7/5 add for debug */
 		pr_err("%s: pstream = %d\n", __func__, tfa98xx->pstream);
 
 		if (tfa98xx->pstream != 0 || tfa98xx->cstream != 0)
@@ -3031,6 +2985,7 @@ static int tfa98xx_mute(struct snd_soc_dai *dai, int mute, int stream)
 
 		cancel_delayed_work_sync(&tfa98xx->init_work);
 
+
 		pr_err("%s: tfa98xx->dsp_fw_state = %d\n", __func__, tfa98xx->dsp_fw_state);
 
 		if (tfa98xx->dsp_fw_state != TFA98XX_DSP_FW_OK)
@@ -3042,7 +2997,7 @@ static int tfa98xx_mute(struct snd_soc_dai *dai, int mute, int stream)
 	} else {
 		if (stream == SNDRV_PCM_STREAM_PLAYBACK)
 #ifdef TFA9894_NONDSP_STEREO
-		/* liuhaituo add */
+
 		{
 			tfa98xx->pstream = 1;
 
@@ -3118,6 +3073,7 @@ static struct snd_soc_dai_driver tfa98xx_dai[] = {
 	},
 };
 
+
 static struct snd_soc_dai_driver dummy_tfa98xx_dai[] = {
 	{
 		.name = "tfa98xx-aif",
@@ -3138,7 +3094,7 @@ static struct snd_soc_dai_driver dummy_tfa98xx_dai[] = {
 		 },
 	},
 };
-// modify end
+
 
 static int tfa98xx_probe(struct snd_soc_codec *codec)
 {
@@ -3472,24 +3428,23 @@ static ssize_t tfa98xx_state_show(struct device *dev, struct device_attribute *a
 
 	if (g_tfa98xx[0]->tfa->is_probus_device) {
 		tfa_dev_mtp_set(g_tfa98xx[0]->tfa, TFA_MTP_EX, 0);
-// #ifdef VENDOR_EDIT
+		
 		error = tfa9874_calibrate(g_tfa98xx[0], &impedance[0]);
 		if (error != Tfa98xx_Error_Ok) {
 			impedance[0] = 0;
 		}
-// #endif
+		
 		pr_info("%s: %#x speaker impedance[0] is %d\n",
 			__func__, g_tfa98xx[0]->i2c->addr, impedance[0]);
 	}
 
 	if (g_tfa98xx[1]->tfa->is_probus_device) {
 		tfa_dev_mtp_set(g_tfa98xx[1]->tfa, TFA_MTP_EX, 0);
-// #ifdef VENDOR_EDIT
+		
 		error = tfa9874_calibrate(g_tfa98xx[1], &impedance[1]);
 		if (error != Tfa98xx_Error_Ok) {
 			impedance[1] = 0;
 		}
-// #endif
 		pr_info("%s: %#x speaker impedance[1] is %d\n",
 			__func__, g_tfa98xx[1]->i2c->addr, impedance[1]);
 	}
@@ -3677,12 +3632,6 @@ static int tfa98xx_i2c_probe(struct i2c_client *i2c,
 	tfa98xx->tfa->data = (void *)tfa98xx;
 	tfa98xx->tfa->cachep = tfa98xx_cache;
 
-	/* Modify the stream names, by appending the i2c device address.
-	 * This is used with multicodec, in order to discriminate the devices.
-	 * Stream names appear in the dai definition and in the stream  	 .
-	 * We create copies of original structures because each device will
-	 * have its own instance of this structure, with its own address.
-	 */
 register_codec:
 	if(dummy) {
 		dai = devm_kzalloc(&i2c->dev, sizeof(dummy_tfa98xx_dai), GFP_KERNEL);
@@ -3719,7 +3668,6 @@ register_codec:
 					&soc_codec_dev_tfa98xx, dai,
 					ARRAY_SIZE(tfa98xx_dai));
 	}
-// modify end
 	if (ret < 0) {
 		dev_err(&i2c->dev, "Failed to register TFA98xx: %d\n", ret);
 		return ret;
@@ -3756,14 +3704,12 @@ register_codec:
 		pr_err("%s sysfs_create_file tfa98xx_state_attr err.",__func__);
 	}
 
-	//liuhaituo@MM.Audio add for detected PA temperature
 	ret = sysfs_create_file(&i2c->dev.kobj, &tfa9874_temperature_attr.attr);
 	if(ret < 0)
 	{
 		pr_err("%s sysfs_create_file tfa9874_temperature_attr err.", __func__);
 	}
 
-	/* Register the sysfs files for climax backdoor access */
 	ret = device_create_bin_file(&i2c->dev, &dev_attr_rw);
 	if (ret)
 		dev_info(&i2c->dev, "error creating sysfs files\n");
@@ -3780,9 +3726,7 @@ register_codec:
 	tfa98xx_device_count++;
 	list_add(&tfa98xx->list, &tfa98xx_device_list);
 	mutex_unlock(&tfa98xx_mutex);
-	#ifdef OPLUS_FEATURE_TFA98XX_VI_FEEDBACK
-	set_smartpa_id(1);
-	#endif
+
 	return 0;
 }
 

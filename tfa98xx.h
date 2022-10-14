@@ -29,7 +29,6 @@
 #define CONFIG_DEBUG_FS
 #endif
 
-/* max. length of a alsa mixer control name */
 #define MAX_CONTROL_NAME        48
 
 #define TFA98XX_MAX_REGISTER              0xff
